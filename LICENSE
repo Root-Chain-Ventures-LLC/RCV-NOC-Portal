@@ -1,0 +1,127 @@
+RCV Community License 1.0
+
+Licensed Work:  RCV NOC Portal
+Licensor:       Root Chain Ventures, LLC
+Copyright:      (c) 2026 Root Chain Ventures, LLC. All rights reserved.
+
+This RCV Community License (the "License") governs use of the Licensed Work
+identified above and its associated container images, installation and
+deployment artifacts, configuration, and documentation (collectively, the
+"Software"). By downloading, installing, copying, accessing, or using the
+Software, you ("you" or "Licensee") agree to the terms of this License. If you
+do not agree, do not download, install, or use the Software.
+
+The Software is made available in object and container-image form only. No
+source code is provided or licensed under this License.
+
+1. FREE USE
+   The Licensor grants you a worldwide, non-exclusive, non-transferable,
+   non-sublicensable, royalty-free license to download, install, and run the
+   unmodified Software on infrastructure you own or control, at no charge, if
+   you are within one or more of the following categories of Free Use:
+
+   (a) Personal use. You are an individual using the Software for personal,
+       educational, hobbyist, or home-lab purposes.
+
+   (b) Internal use. You are an organization using the Software solely for your
+       own Internal Business Operations.
+
+   Free Use is for your own benefit (or your organization's own benefit) only,
+   and does not include the activity described in Section 2.
+
+2. ACTIVITY THAT REQUIRES A PAID COMMERCIAL LICENSE
+   You must obtain a separate paid commercial license from the Licensor before
+   you provide, host, operate, resell, rent, lease, or otherwise make the
+   Software, or any substantial part of its features or functionality, available
+   to any third party as a hosted, managed, or software-as-a-service offering,
+   or otherwise operate the Software for the benefit of third parties (including
+   as a managed service provider). This activity is not permitted under Free
+   Use.
+
+   To obtain a commercial license, contact the Licensor at the address in
+   Section 11.
+
+3. GENERAL RESTRICTIONS
+   Whether your use is Free Use or under a paid commercial license, you shall
+   not, and shall not permit any third party to:
+
+   3.1 reverse engineer, decompile, disassemble, or otherwise attempt to derive
+       the source code, structure, or underlying ideas of the Software, except
+       to the limited extent this restriction is prohibited by applicable law;
+
+   3.2 modify, adapt, or create derivative works of the Software, or circumvent
+       or disable any license-key, authentication, telemetry, or other
+       technical or security mechanism in the Software;
+
+   3.3 remove, alter, or obscure any copyright, trademark, license, or other
+       proprietary notice in or on the Software or its documentation;
+
+   3.4 redistribute, publish, or transfer the Software or any copy to any third
+       party except as expressly permitted by a paid commercial license; or
+
+   3.5 use the Software in violation of any applicable law or regulation.
+
+4. OWNERSHIP
+   The Software is licensed, not sold. The Licensor and its licensors retain all
+   right, title, and interest in and to the Software, including all intellectual
+   property rights. All rights not expressly granted are reserved.
+
+5. THIRD-PARTY AND OPEN-SOURCE COMPONENTS
+   The Software may include third-party or open-source components licensed under
+   their own terms. Those components are provided subject to their own licenses,
+   and nothing in this License limits your rights under, or grants rights that
+   supersede, those licenses.
+
+6. UPDATES
+   The Licensor may, but is not obligated to, provide updates, upgrades, or new
+   versions of the Software. Any such update is part of the "Software" and is
+   governed by this License unless accompanied by separate terms.
+
+7. TERM AND TERMINATION
+   7.1 This License is effective until terminated.
+   7.2 This License terminates automatically if you breach any of its terms. If
+       the Licensor gives you notice of a violation and you cure it within
+       thirty (30) days of receiving notice, your license is reinstated.
+   7.3 Upon termination you must cease all use of the Software and destroy all
+       copies in your possession or control. Sections 3 through 11 survive
+       termination.
+
+8. DISCLAIMER OF WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF ANY
+   KIND, WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING WITHOUT LIMITATION
+   THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,
+   TITLE, AND NON-INFRINGEMENT. THE LICENSOR DOES NOT WARRANT THAT THE SOFTWARE
+   WILL BE UNINTERRUPTED, ERROR-FREE, OR SECURE.
+
+9. LIMITATION OF LIABILITY
+   TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT WILL THE
+   LICENSOR BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR
+   EXEMPLARY DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, DATA, OR USE, ARISING
+   OUT OF OR RELATED TO THIS LICENSE OR THE SOFTWARE, WHETHER IN CONTRACT, TORT,
+   OR OTHERWISE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. THE
+   LICENSOR'S TOTAL AGGREGATE LIABILITY ARISING OUT OF OR RELATED TO THIS
+   LICENSE WILL NOT EXCEED THE GREATER OF (A) THE AMOUNTS YOU PAID THE LICENSOR
+   FOR THE SOFTWARE IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM, OR (B) ONE
+   HUNDRED U.S. DOLLARS (US$100).
+
+10. GOVERNING LAW
+    This License is governed by the laws of the State of Wyoming, United States,
+    without regard to its conflict-of-laws rules. The exclusive venue for any
+    dispute arising under this License is the state and federal courts located
+    in Sheridan County, Wyoming.
+
+11. DEFINITIONS AND CONTACT
+    "Internal Business Operations" means use of the Software for an
+    organization's own internal network- and operations-management purposes, by
+    its own employees, agents, and contractors acting on its behalf, and not for
+    the benefit of any third party.
+
+    Notices and commercial-license inquiries:
+
+        Root Chain Ventures, LLC
+        30 N Gould St, Ste #60062
+        Sheridan, WY 82801, USA
+        legal@rootchainventures.com
+        https://www.rootchainventures.com
+
+Copyright (c) 2026 Root Chain Ventures, LLC. All rights reserved.
