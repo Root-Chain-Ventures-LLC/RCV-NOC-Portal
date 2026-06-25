@@ -1,0 +1,55 @@
+# Example values for the RCV platform umbrella chart.
+#   helm install rcv oci://ghcr.io/root-chain-ventures-llc/helm/rcv-platform \
+#     --version 0.1.0 -n rcv --create-namespace -f values.example.yaml
+#
+# Install with release name `rcv` so module→Portal URLs resolve to rcv-noc-portal.
+
+# ----- Portal (the hub — always installed) -----
+noc-portal:
+  secrets:
+    # openssl rand -hex 32
+    portalSecretKey: "REPLACE_WITH_openssl_rand_hex_32"
+    # python3 -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+    # MUST persist across restarts or stored secrets become unreadable.
+    secretsEncryptionKey: "REPLACE_WITH_urlsafe_base64_32B_key"
+  database:
+    host: "postgres.example.internal"   # external PostgreSQL 14+ (no bundled DB)
+    port: 5432
+    user: portal
+    name: portal
+    password: "REPLACE_WITH_PG_PASSWORD"
+    sslmode: "verify-full"              # recommended; do not disable verification
+  env:
+    PORTAL_PUBLIC_BASE_URL: "https://noc.example.com"   # must match the ingress host
+  ingress:
+    enabled: true
+    host: noc.example.com
+    tls: true
+
+# ----- Modules (all OFF by default; flip enabled: true to include) -----
+pingit:
+  enabled: false
+  postgres:
+    enabled: true                       # in-chart TimescaleDB for the module
+    password: "REPLACE_WITH_PINGIT_PG_PASSWORD"
+  ingress:
+    enabled: true
+    host: pingit.example.com
+
+siteLookUp:
+  enabled: false
+  postgres:
+    enabled: true
+    password: "REPLACE_WITH_SITELOOKUP_PG_PASSWORD"
+  ingress:
+    enabled: true
+    host: sites.example.com
+
+outageTrack:
+  enabled: false
+  postgres:
+    enabled: true
+    password: "REPLACE_WITH_OUTAGE_PG_PASSWORD"
+  ingress:
+    enabled: true
+    host: outage.example.com
