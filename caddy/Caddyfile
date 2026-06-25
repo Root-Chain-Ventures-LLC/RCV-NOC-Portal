@@ -1,0 +1,75 @@
+# RCV NOC Portal — front-door gateway.
+#
+# Two site blocks so internal TLS actually provisions a leaf cert (issue #22):
+# a combined ":80, :443" block leaves Caddy "listening only on the HTTP port"
+# and never issues a cert, so HTTPS on a bare IP fails the handshake. Splitting
+# them lets `tls internal` issue a cert (including for IP SANs) on :443, while
+# :80 stays available for LAN/single-VM installs.
+#
+# Cookies are marked Secure per-request from X-Forwarded-Proto (which Caddy's
+# reverse_proxy sets), so a plain-HTTP login over :80 still receives a usable
+# session cookie instead of one the browser silently drops.
+#
+# For a public host: replace `tls internal` with an email/hostname for Let's
+# Encrypt, set the :443 site address to your domain, and set
+# PORTAL_FORCE_HTTPS_REDIRECT=true (env) so the :80 block 308-redirects to HTTPS
+# instead of proxying cleartext. The redirect is OFF by default so LAN /
+# `tls internal` / single-VM installs reached over plain :80 keep working.
+#
+# Defense-in-depth (issue #83): the platform credentials path
+# (GET /api/platform/integrations/*/credentials) returns decrypted integration
+# secrets and is only ever called by modules on the private rcv-net. It is
+# IP-restricted at this edge to RFC1918 ranges; a request whose real client IP
+# (resolved through the trusted-proxy chain) is non-private gets 403 here,
+# before it ever reaches the backend.
+#
+# Path-based routing is the default (PLATFORM_CONTRACT.md §7). Module reverse
+# proxies are appended by the Portal's gateway-config generator as modules are
+# installed, e.g.:
+#
+#   handle /pingit/* { reverse_proxy pingit-web:8000 }
+#   handle /outage/* { reverse_proxy outagelog-web:3000 }
+#   handle /sites/*  { reverse_proxy site-look-up-app:3000 }
+
+# Snippet: 403 the credentials path for non-RFC1918 clients (issue #83).
+# `client_ip` is the address resolved through Caddy's trusted-proxy handling, so
+# a left-most X-Forwarded-For entry can't be forged to look private. Imported
+# into every site block that fronts the backend.
+(credentials_ip_guard) {
+	@cred_public {
+		path_regexp ^/api/platform/integrations/[^/]+/credentials$
+		not client_ip 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 127.0.0.0/8
+	}
+	respond @cred_public 403
+}
+
+:443 {
+	tls internal
+
+	import credentials_ip_guard
+
+	# Module routes the Portal deployer writes on install (issue #55, Gap 4),
+	# matched before the catch-all. No-op until a module is deployed.
+	import /etc/caddy/modules/*.caddy
+
+	# Portal UI + API (the catch-all root).
+	reverse_proxy web:8080
+}
+
+:80 {
+	# Opt-in HTTPS redirect for public deploys (issue #83): set
+	# PORTAL_FORCE_HTTPS_REDIRECT=true so cleartext X-Api-Key / Bearer tokens on
+	# :80 are 308-redirected to HTTPS. OFF by default ("false") — LAN /
+	# tls-internal / single-VM installs reached over plain HTTP keep working.
+	# Quote the whole placeholder so the substituted value is always a CEL
+	# string — a bare `false`/`true` is parsed as a bool and CEL errors on
+	# `bool == string`, so Caddy refuses to start. Works for unset/"false"/"true".
+	@force_https expression `"{$PORTAL_FORCE_HTTPS_REDIRECT:false}" == "true"`
+	redir @force_https https://{host}{uri} 308
+
+	import credentials_ip_guard
+
+	# Plain HTTP for LAN / single-VM installs (when the redirect above is off).
+	import /etc/caddy/modules/*.caddy
+	reverse_proxy web:8080
+}

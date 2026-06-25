@@ -1,0 +1,145 @@
+# RCV NOC Portal — base compose.
+#
+# This file PULLS published images (no `build:`), so an external operator can run
+# `docker compose up -d` against a release without the source tree (issue #104 /
+# #107). Set PORTAL_VERSION in .env to a published tag (default `latest`; pin a
+# release like `v0.1.0` for reproducibility — see deploy/RELEASE.md).
+#
+# Developing from a clone and want to build the web/deployer images from local
+# source instead of pulling? Add the dev override:
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+# (install.sh does this for you.)
+#
+# Only `caddy` binds host ports; it is the platform front-door gateway. Modules
+# (PingIt, Outage-Track, Site-Look-Up) attach to the shared `rcv-net` network and
+# are routed by path (default) or subdomain — see PLATFORM_CONTRACT.md §7.
+
+name: rcv-portal
+
+services:
+  web:
+    image: ghcr.io/root-chain-ventures-llc/noc-portal-web:${PORTAL_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      PORTAL_ENVIRONMENT: ${PORTAL_ENVIRONMENT:-production}
+      PORTAL_VERSION: ${PORTAL_VERSION:-0.1.0}
+      PORTAL_SECRET_KEY: ${PORTAL_SECRET_KEY:?set PORTAL_SECRET_KEY in .env}
+      # Fernet key that encrypts secrets at rest (Entra SSO client secret, OIDC
+      # signing key). Without this the web container generates a random ephemeral
+      # key on each boot, making persisted secrets_enc rows un-decryptable across
+      # restarts. REQUIRED for SSO to survive any container restart.
+      PORTAL_SECRETS_ENCRYPTION_KEY: ${PORTAL_SECRETS_ENCRYPTION_KEY:?set PORTAL_SECRETS_ENCRYPTION_KEY in .env}
+      PORTAL_REQUIRE_HTTPS: ${PORTAL_REQUIRE_HTTPS:-true}
+      PORTAL_TRUSTED_PROXY_COUNT: ${PORTAL_TRUSTED_PROXY_COUNT:-1}
+      # Public base URL — the OIDC issuer and SSO redirect base. Must match the
+      # externally-reachable URL when behind a reverse proxy; the default only
+      # works for standalone dev. Required for OIDC discovery and module SSO to
+      # resolve correctly.
+      PORTAL_PUBLIC_BASE_URL: ${PORTAL_PUBLIC_BASE_URL:-http://localhost:8000}
+      PORTAL_DATABASE_URL: postgresql+asyncpg://portal:${POSTGRES_PASSWORD:-portal}@db:5432/portal
+      # Module deployment (issue #37). Default off; set to 'compose' and run the
+      # deployer (profile: deploy) to enable one-click install on this host.
+      PORTAL_ORCHESTRATOR: ${PORTAL_ORCHESTRATOR:-none}
+      PORTAL_DEPLOYER_URL: ${PORTAL_DEPLOYER_URL:-http://deployer:9000}
+      PORTAL_DEPLOYER_TOKEN: ${PORTAL_DEPLOYER_TOKEN:-}
+      # First-run admin password (issue #108 / blocker fix). install.sh writes a
+      # random value into .env; without this passthrough the container falls back
+      # to the settings.py default ("changeme") and the installer-printed password
+      # never works on the first login. Empty string is fine: if the operator
+      # omits this key the settings fallback still generates a forced-change admin.
+      PORTAL_DEFAULT_ADMIN_PASSWORD: ${PORTAL_DEFAULT_ADMIN_PASSWORD:-}
+      PORTAL_DEFAULT_ADMIN_EMAIL: ${PORTAL_DEFAULT_ADMIN_EMAIL:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - rcv-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: portal
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-portal}
+      POSTGRES_DB: portal
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - rcv-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U portal -d portal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      # Opt-in edge HTTPS redirect (issue #83). Default off so LAN / tls-internal
+      # installs over plain :80 keep working. The Caddyfile reads this var.
+      PORTAL_FORCE_HTTPS_REDIRECT: ${PORTAL_FORCE_HTTPS_REDIRECT:-false}
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Per-module route snippets the deployer writes on install (issue #55,
+      # Gap 4); imported by the Caddyfile. Read-only here.
+      - ./caddy/modules:/etc/caddy/modules:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - rcv-net
+
+  # Privileged module deployer (issue #37). Opt-in via `--profile deploy`; holds
+  # the Docker socket and applies module deploy plans on this host. Never binds a
+  # host port — reachable only from `web` on the internal network.
+  deployer:
+    image: ghcr.io/root-chain-ventures-llc/noc-portal-deployer:${PORTAL_VERSION:-latest}
+    restart: unless-stopped
+    profiles: ["deploy"]
+    environment:
+      # Required to actually use the deployer; the service refuses all requests
+      # while it is empty.
+      PORTAL_DEPLOYER_TOKEN: ${PORTAL_DEPLOYER_TOKEN:-}
+      PORTAL_PUBLIC_BASE_URL: ${PORTAL_PUBLIC_BASE_URL:-http://localhost:8000}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - deployer_state:/var/lib/rcv-deployer
+      # Module images live in private GHCR packages. `docker compose` runs inside
+      # this container and resolves registry auth from *its own* docker config —
+      # not the host's — so mount the host's config (read-only) to reuse an
+      # existing `docker login ghcr.io`. install.sh sets PORTAL_DOCKER_CONFIG_DIR
+      # to the right path; the default suits a root-run install.
+      - ${PORTAL_DOCKER_CONFIG_DIR:-/root/.docker}:/root/.docker:ro
+      # Writes per-module Caddy route snippets here on deploy/undeploy (issue
+      # #55, Gap 4), then reloads the gateway. Read-write.
+      - ./caddy/modules:/etc/caddy/modules
+    networks:
+      - rcv-net
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:9000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  rcv-net:
+    name: rcv-net
+
+volumes:
+  caddy_data:
+  caddy_config:
+  pg_data:
+  deployer_state:
