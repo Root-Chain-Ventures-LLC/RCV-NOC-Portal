@@ -1,7 +1,7 @@
 # RCV NOC Portal — module gateway routes.
 #
 # The Portal deployer writes one `<module>.caddy` snippet here when a module is
-# installed and removes it on uninstall (issue #55, Gap 4), then reloads Caddy.
-# This placeholder keeps the `import /etc/caddy/modules/*.caddy` glob in the
-# Caddyfile matching at least one file before any module is deployed. It
-# contains no directives, so it has no effect on routing. Do not delete.
+# installed and removes it on uninstall, then reloads Caddy. This placeholder
+# keeps the `import /etc/caddy/modules/*.caddy` glob in the Caddyfile matching
+# at least one file before any module is deployed. It contains no directives, so
+# it has no effect on routing. Do not delete.

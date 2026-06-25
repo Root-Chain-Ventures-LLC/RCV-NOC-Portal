@@ -57,10 +57,10 @@ gen_fernet_key() {
 }
 
 gen_password() {
-  # A short random admin password printed once at install (issue #108). The UI
-  # forces a rotation at first login, so this only has to survive the first
-  # sign-in — it must never be the static `changeme` on disk. Strip + / = so the
-  # value is safe in .env and easy to copy-paste.
+  # A short random admin password printed once at install. The UI forces a
+  # rotation at first login, so this only has to survive the first sign-in —
+  # it must never be the static `changeme` on disk. Strip + / = so the value is
+  # safe in .env and easy to copy-paste.
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -base64 18 | tr '+/' '-_' | tr -d '='
   else
@@ -110,7 +110,7 @@ fill_secret() {
 
 honor_env_vars() {
   # If the operator passed vars in the environment (e.g. PORTAL_PUBLIC_BASE_URL=http://host ./install.sh),
-  # inject them into .env BEFORE fill_secret runs -- so they are preserved (#2).
+  # inject them into .env BEFORE fill_secret runs -- so they are preserved.
   local honored=(
     PORTAL_PUBLIC_BASE_URL
     PORTAL_REQUIRE_HTTPS
@@ -134,17 +134,17 @@ ensure_env() {
     cp "$EXAMPLE_FILE" "$ENV_FILE"
     echo "Created .env from .env.example"
   fi
-  honor_env_vars   # inject shell env vars into .env before fill_secret runs (#2)
+  honor_env_vars   # inject shell env vars into .env before fill_secret runs
   fill_secret PORTAL_SECRET_KEY "gen_hex"
   fill_secret POSTGRES_PASSWORD "gen_hex" "portal"
   fill_secret PORTAL_SECRETS_ENCRYPTION_KEY "gen_fernet_key"
   # Replace the `changeme` placeholder admin password with a random one so the
-  # default credential is never persisted (issue #108). print_next_steps echoes
-  # the generated value once; first login forces a rotation.
+  # default credential is never persisted. print_next_steps echoes the generated
+  # value once; first login forces a rotation.
   fill_secret PORTAL_DEFAULT_ADMIN_PASSWORD "gen_password" "changeme"
   echo "Secrets ensured in .env (existing values preserved)."
 
-  # HTTPS posture check (issue #117). ----------------------------------------
+  # HTTPS posture check. -------------------------------------------------------
   # The default install posture is HTTPS (PORTAL_REQUIRE_HTTPS=true). Warn the
   # operator if the base URL is still the example placeholder so they know to
   # update it before SSO/OIDC will work in production. Dev/LAN installs that
@@ -175,11 +175,11 @@ ensure_env() {
     echo "  cleartext. Acceptable for local dev / trusted LAN only."
   fi
 
-  # Auto-enable one-click module deploys (issue #51). install.sh IS the
-  # single-host Docker installer, so the environment is "compose" by
-  # definition — detect it instead of making the operator hand-set
-  # PORTAL_ORCHESTRATOR and start a profile. Only promote the default 'none';
-  # never clobber an operator who deliberately chose another value.
+  # Auto-enable one-click module deploys. install.sh IS the single-host Docker
+  # installer, so the environment is "compose" by definition — detect it instead
+  # of making the operator hand-set PORTAL_ORCHESTRATOR and start a profile.
+  # Only promote the default 'none'; never clobber an operator who deliberately
+  # chose another value.
   local orch
   orch="$(current_value PORTAL_ORCHESTRATOR)"
   if [ -z "$orch" ] || [ "$orch" = "none" ]; then
@@ -295,7 +295,7 @@ print_next_steps() {
   echo "  Password: $admin_pass"
   echo "            ^ rotate this password immediately at first login."
   echo
-  echo "  Next: add modules — Portal → Modules → Install. See HANDOFF.md."
+  echo "  Next: add modules — Portal → Modules → Install."
   echo "============================================================"
 }
 
@@ -389,8 +389,8 @@ main() {
     exit 0
   fi
   # Build from local source only when the dev override + source tree are present
-  # (a full repo clone). A clean public install bundle ships just the base
-  # compose, which PULLS the published images instead (issue #104 / #107).
+  # (a full repo clone). A clean install bundle ships just the base compose,
+  # which PULLS the published images instead.
   local build_files=() build_flag=""
   if [ -f "$SCRIPT_DIR/docker-compose.build.yml" ] && [ -d "$SCRIPT_DIR/backend" ]; then
     build_files=(-f docker-compose.yml -f docker-compose.build.yml)
@@ -402,7 +402,7 @@ main() {
   # shellcheck disable=SC2046 # intentional word-splitting of the profile flag
   (cd "$SCRIPT_DIR" && compose "${build_files[@]}" $(deploy_profile_args) up -d $build_flag)
   # Print the access URL + credentials whether or not the health probe passed —
-  # an aborted banner is why operators couldn't find the login (issue follow-up).
+  # the banner is always shown so operators can find the login URL.
   if wait_for_health; then
     print_next_steps 1
   else
