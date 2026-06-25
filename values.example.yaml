@@ -1,55 +1,41 @@
-# Example values for the RCV platform umbrella chart.
-#   helm install rcv oci://ghcr.io/root-chain-ventures-llc/helm/rcv-platform \
+# Example values for the RCV NOC Portal (noc-portal chart).
+#   helm install rcv oci://ghcr.io/root-chain-ventures-llc/helm/noc-portal \
 #     --version 0.1.0 -n rcv --create-namespace -f values.example.yaml
 #
-# Install with release name `rcv` so module→Portal URLs resolve to rcv-noc-portal.
+# Install the Portal first; add modules afterward from the Portal UI
+# (Modules -> Install) — the Portal mints their OIDC client + API key and deploys
+# them for you. Use release name `rcv` so module->Portal URLs resolve.
 
-# ----- Portal (the hub — always installed) -----
-noc-portal:
-  secrets:
-    # openssl rand -hex 32
-    portalSecretKey: "REPLACE_WITH_openssl_rand_hex_32"
-    # python3 -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
-    # MUST persist across restarts or stored secrets become unreadable.
-    secretsEncryptionKey: "REPLACE_WITH_urlsafe_base64_32B_key"
-  database:
-    host: "postgres.example.internal"   # external PostgreSQL 14+ (no bundled DB)
-    port: 5432
-    user: portal
-    name: portal
-    password: "REPLACE_WITH_PG_PASSWORD"
-    sslmode: "verify-full"              # recommended; do not disable verification
-  env:
-    PORTAL_PUBLIC_BASE_URL: "https://noc.example.com"   # must match the ingress host
-  ingress:
-    enabled: true
-    host: noc.example.com
-    tls: true
+# Lets the Portal deploy modules in-cluster; also sets PORTAL_ORCHESTRATOR=kubernetes.
+rbac:
+  create: true
 
-# ----- Modules (all OFF by default; flip enabled: true to include) -----
-pingit:
-  enabled: false
-  postgres:
-    enabled: true                       # in-chart TimescaleDB for the module
-    password: "REPLACE_WITH_PINGIT_PG_PASSWORD"
-  ingress:
-    enabled: true
-    host: pingit.example.com
+secrets:
+  # openssl rand -hex 32
+  portalSecretKey: "REPLACE_WITH_openssl_rand_hex_32"
+  # python3 -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+  # MUST persist across restarts or stored secrets become unreadable.
+  secretsEncryptionKey: "REPLACE_WITH_urlsafe_base64_32B_key"
 
-siteLookUp:
-  enabled: false
-  postgres:
-    enabled: true
-    password: "REPLACE_WITH_SITELOOKUP_PG_PASSWORD"
-  ingress:
-    enabled: true
-    host: sites.example.com
+# The Portal's own external PostgreSQL 14+ (no bundled DB).
+database:
+  host: "postgres.example.internal"
+  port: 5432
+  user: portal
+  name: portal
+  password: "REPLACE_WITH_PORTAL_PG_PASSWORD"
+  sslmode: "verify-full"
 
-outageTrack:
-  enabled: false
-  postgres:
-    enabled: true
-    password: "REPLACE_WITH_OUTAGE_PG_PASSWORD"
-  ingress:
-    enabled: true
-    host: outage.example.com
+env:
+  # Public https:// URL of the Portal — OIDC issuer + SSO base; match the ingress host.
+  PORTAL_PUBLIC_BASE_URL: "https://noc.example.com"
+  # Cluster DB authority modules connect to (user:password@host:port). On k8s the
+  # Portal does not run a per-module DB; each module appends its own db name.
+  PORTAL_K8S_MODULE_DB: "moduser:REPLACE_WITH_MODULE_PG_PASSWORD@postgres.example.internal:5432"
+  # Optional: namespace modules deploy into (defaults to the Portal's namespace).
+  # PORTAL_K8S_NAMESPACE: "rcv"
+
+ingress:
+  enabled: true
+  host: noc.example.com
+  tls: true
