@@ -69,9 +69,8 @@ forced to set a new password.
 
 ## Install with Kubernetes (Helm)
 
-Charts are published to GHCR OCI — no clone required. Install the Portal with
-`rbac.create=true` so it can deploy modules into its own namespace, and use
-release name `rcv` so module→Portal URLs resolve:
+Charts are published to GHCR OCI — no clone required. Use release name `rcv`
+so module→Portal URLs resolve:
 
 ```bash
 PORTAL_SECRET_KEY=$(openssl rand -hex 32)
@@ -79,7 +78,6 @@ ENC_KEY=$(python3 -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom
 
 helm install rcv oci://ghcr.io/root-chain-ventures-llc/helm/noc-portal --version 0.1.1 \
   --namespace rcv --create-namespace \
-  --set rbac.create=true \
   --set secrets.portalSecretKey="$PORTAL_SECRET_KEY" \
   --set secrets.secretsEncryptionKey="$ENC_KEY" \
   --set database.host=<pg-host> --set database.password=<pg-password> \
@@ -98,14 +96,38 @@ Portal plus modules declaratively — advanced/GitOps.)
 
 ## Add modules
 
-After the Portal is up, sign in as an admin and open **Modules → Install**. The
-Portal mints the module's OIDC client + API key and deploys it for you — on
-**Docker** via the bundled deployer (enabled automatically by `install.sh`), on
-**Kubernetes** in-cluster (via `rbac.create=true`). Module images are public, so
-no login is required.
+**On Docker**, sign in as an admin and open **Modules → Install**: the Portal
+mints the module's OIDC client + API key and deploys it for you via the bundled
+deployer (enabled automatically by `install.sh`). You can alternatively scaffold
+a module's stack manually with `./install.sh add-module pingit`, then register
+it in the Portal UI.
 
-On Docker you can alternatively scaffold a module's stack manually:
-`./install.sh add-module pingit` (then register it in the Portal UI).
+**On Kubernetes, module install is manual** — the one-click deploy applies to
+Docker installs only:
+
+1. In the Portal, open **Modules** and register the module. Copy the **OIDC
+   client secret** it displays — it is shown **once**.
+2. Open **API Keys** and mint a platform key for the module (grant
+   `integrations:read` for PingIt and Site Look Up; Outage Track needs no scopes).
+3. Deploy the module with the umbrella chart, filling its `secretEnv` values —
+   e.g. Site Look Up:
+
+   ```bash
+   helm upgrade rcv oci://ghcr.io/root-chain-ventures-llc/helm/rcv-platform \
+     --version 0.1.1 --reuse-values -n rcv \
+     --set siteLookUp.enabled=true \
+     --set siteLookUp.secretEnv.JWT_SECRET=$(openssl rand -hex 32) \
+     --set siteLookUp.secretEnv.PORTAL_API_KEY=<key from step 2> \
+     --set siteLookUp.secretEnv.OIDC_CLIENT_SECRET=<secret from step 1>
+   ```
+
+   Umbrella module keys and their `secretEnv` names: `pingit`
+   (`PINGIT_PORTAL_API_KEY`, `PINGIT_PORTAL_OIDC_CLIENT_SECRET`) · `siteLookUp`
+   (`JWT_SECRET`, `PORTAL_API_KEY`, `OIDC_CLIENT_SECRET`) · `outageTrack`
+   (`NEXTAUTH_SECRET`, `PORTAL_API_KEY`, `PORTAL_OIDC_CLIENT_SECRET`). See
+   [`values.example.yaml`](values.example.yaml) for a file-based install.
+4. The Portal gateway routes `/pingit`, `/sites`, and `/outage` to the modules
+   automatically; the module shows healthy in the Portal once its pod is up.
 
 Module repos: [RCV-Ping-It](https://github.com/Root-Chain-Ventures-LLC/RCV-Ping-It) ·
 [RCV-Site-Look-Up](https://github.com/Root-Chain-Ventures-LLC/RCV-Site-Look-Up) ·
