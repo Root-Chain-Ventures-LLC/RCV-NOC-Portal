@@ -9,8 +9,9 @@
 # be healthy, and prints the login URL.
 #
 # Usage:
-#   ./install.sh             # generate .env (with random secrets) and start
-#   ./install.sh --no-start  # only generate/refresh .env, don't start Docker
+#   ./install.sh                          # generate .env (with random secrets) and start
+#   ./install.sh --base-url=https://host  # pin PORTAL_PUBLIC_BASE_URL explicitly
+#   ./install.sh --no-start               # only generate/refresh .env, don't start Docker
 #   ./install.sh --help
 #
 set -euo pipefail
@@ -20,10 +21,19 @@ ENV_FILE="$SCRIPT_DIR/.env"
 EXAMPLE_FILE="$SCRIPT_DIR/.env.example"
 
 START=1
+BASE_URL_OVERRIDE=""
 if [ "${1:-}" != "add-module" ]; then
   for arg in "$@"; do
     case "$arg" in
       --no-start) START=0 ;;
+      --base-url=*)
+        # Explicit override for PORTAL_PUBLIC_BASE_URL (issue #164), e.g.
+        # --base-url=https://noc.myorg.com. Takes precedence over both the
+        # auto-detected host IP and any existing .env value (a deliberate
+        # operator choice always wins). See also: the PORTAL_PUBLIC_BASE_URL
+        # environment variable, honored the same way (honor_env_vars).
+        BASE_URL_OVERRIDE="${arg#--base-url=}"
+        ;;
       -h | --help)
         sed -n '3,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
         exit 0
@@ -56,11 +66,19 @@ gen_fernet_key() {
   fi
 }
 
+detect_host_ip() {
+  # Best-effort primary LAN/public IPv4 of this host, empty if undetectable.
+  # Shared by the PORTAL_PUBLIC_BASE_URL default, the Caddy TLS subject list
+  # (PORTAL_GATEWAY_ADDRESSES, issue #162), and the printed banner, so all
+  # three always agree on the same address.
+  hostname -I 2>/dev/null | awk '{print $1}'
+}
+
 gen_password() {
-  # A short random admin password printed once at install. The UI forces a
-  # rotation at first login, so this only has to survive the first sign-in —
-  # it must never be the static `changeme` on disk. Strip + / = so the value is
-  # safe in .env and easy to copy-paste.
+  # A short random admin password printed once at install (issue #108). The UI
+  # forces a rotation at first login, so this only has to survive the first
+  # sign-in — it must never be the static `changeme` on disk. Strip + / = so the
+  # value is safe in .env and easy to copy-paste.
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -base64 18 | tr '+/' '-_' | tr -d '='
   else
@@ -110,7 +128,7 @@ fill_secret() {
 
 honor_env_vars() {
   # If the operator passed vars in the environment (e.g. PORTAL_PUBLIC_BASE_URL=http://host ./install.sh),
-  # inject them into .env BEFORE fill_secret runs -- so they are preserved.
+  # inject them into .env BEFORE fill_secret runs -- so they are preserved (#2).
   local honored=(
     PORTAL_PUBLIC_BASE_URL
     PORTAL_REQUIRE_HTTPS
@@ -129,22 +147,85 @@ honor_env_vars() {
   done
 }
 
+# ensure_gateway_addresses: set PORTAL_GATEWAY_ADDRESSES, the TLS automation
+# subject list the bundled Caddy's :443 block issues its self-signed
+# certificate for (issue #162). A bare ":443" site address has NO subject for
+# `tls internal` to issue a cert FOR, so no certificate is ever minted and
+# every HTTPS handshake fails with `internal_error` — confirmed by hand via
+# `curl -k https://localhost/` and `curl -k https://<host-ip>/` both failing
+# that way against the previous Caddyfile. Always include localhost +
+# 127.0.0.1 (so `https://localhost/` — what the success banner tells the
+# operator to open — always gets a cert) plus the detected host IP so
+# `https://<host-ip>/` does too.
+ensure_gateway_addresses() {
+  local host_ip addrs
+  host_ip="$(detect_host_ip)"
+  addrs="localhost:443, 127.0.0.1:443"
+  [ -n "$host_ip" ] && addrs="$addrs, $host_ip:443"
+  set_value PORTAL_GATEWAY_ADDRESSES "$addrs"
+}
+
+# ensure_public_base_url: resolve PORTAL_PUBLIC_BASE_URL to something that
+# actually works, instead of leaving the .env.example placeholder in place
+# (issue #164 — every module's OIDC redirect URIs are minted from this value
+# at register time, so a placeholder means "SSO dead on arrival" for every
+# module installed against a fresh deploy). Precedence, highest first:
+#   1. --base-url=<url> (explicit operator choice)
+#   2. PORTAL_PUBLIC_BASE_URL already customized in .env (untouched — never
+#      clobber a value the operator or a previous run already set)
+#   3. auto-detected primary host IP: https://<ip>
+#   4. https://localhost (last resort, when no IP could be detected)
+ensure_public_base_url() {
+  local base_url_val host_ip
+  if [ -n "$BASE_URL_OVERRIDE" ]; then
+    set_value PORTAL_PUBLIC_BASE_URL "$BASE_URL_OVERRIDE"
+    echo "PORTAL_PUBLIC_BASE_URL set from --base-url: $BASE_URL_OVERRIDE"
+  fi
+  base_url_val="$(current_value PORTAL_PUBLIC_BASE_URL)"
+  host_ip="$(detect_host_ip)"
+  case "$base_url_val" in
+    "https://noc.example.com" | "")
+      if [ -n "$host_ip" ]; then
+        set_value PORTAL_PUBLIC_BASE_URL "https://$host_ip"
+        echo "PORTAL_PUBLIC_BASE_URL was the placeholder — set to https://$host_ip"
+        echo "  (this host's detected primary IP). Change it in .env if this Portal is"
+        echo "  reachable at a different hostname, then re-run ./install.sh and"
+        echo "  redeploy any installed modules (Modules -> Deploy) to refresh their"
+        echo "  OIDC redirect URIs."
+      else
+        set_value PORTAL_PUBLIC_BASE_URL "https://localhost"
+        echo "PORTAL_PUBLIC_BASE_URL was the placeholder and no host IP could be"
+        echo "  detected — set to https://localhost. Set it explicitly"
+        echo "  (--base-url=https://<host> or PORTAL_PUBLIC_BASE_URL in .env) for any"
+        echo "  install reachable from another machine, then redeploy any installed"
+        echo "  modules (Modules -> Deploy) to refresh their OIDC redirect URIs."
+      fi
+      ;;
+    *)
+      : # Already customized (by --base-url above, a previous run, or the
+        # operator editing .env by hand) — never overwrite it.
+      ;;
+  esac
+}
+
 ensure_env() {
   if [ ! -f "$ENV_FILE" ]; then
     cp "$EXAMPLE_FILE" "$ENV_FILE"
     echo "Created .env from .env.example"
   fi
-  honor_env_vars   # inject shell env vars into .env before fill_secret runs
+  honor_env_vars   # inject shell env vars into .env before fill_secret runs (#2)
+  ensure_gateway_addresses
+  ensure_public_base_url
   fill_secret PORTAL_SECRET_KEY "gen_hex"
   fill_secret POSTGRES_PASSWORD "gen_hex" "portal"
   fill_secret PORTAL_SECRETS_ENCRYPTION_KEY "gen_fernet_key"
   # Replace the `changeme` placeholder admin password with a random one so the
-  # default credential is never persisted. print_next_steps echoes the generated
-  # value once; first login forces a rotation.
+  # default credential is never persisted (issue #108). print_next_steps echoes
+  # the generated value once; first login forces a rotation.
   fill_secret PORTAL_DEFAULT_ADMIN_PASSWORD "gen_password" "changeme"
   echo "Secrets ensured in .env (existing values preserved)."
 
-  # HTTPS posture check. -------------------------------------------------------
+  # HTTPS posture check (issue #117). ----------------------------------------
   # The default install posture is HTTPS (PORTAL_REQUIRE_HTTPS=true). Warn the
   # operator if the base URL is still the example placeholder so they know to
   # update it before SSO/OIDC will work in production. Dev/LAN installs that
@@ -175,11 +256,11 @@ ensure_env() {
     echo "  cleartext. Acceptable for local dev / trusted LAN only."
   fi
 
-  # Auto-enable one-click module deploys. install.sh IS the single-host Docker
-  # installer, so the environment is "compose" by definition — detect it instead
-  # of making the operator hand-set PORTAL_ORCHESTRATOR and start a profile.
-  # Only promote the default 'none'; never clobber an operator who deliberately
-  # chose another value.
+  # Auto-enable one-click module deploys (issue #51). install.sh IS the
+  # single-host Docker installer, so the environment is "compose" by
+  # definition — detect it instead of making the operator hand-set
+  # PORTAL_ORCHESTRATOR and start a profile. Only promote the default 'none';
+  # never clobber an operator who deliberately chose another value.
   local orch
   orch="$(current_value PORTAL_ORCHESTRATOR)"
   if [ -z "$orch" ] || [ "$orch" = "none" ]; then
@@ -263,7 +344,7 @@ wait_for_health() {
 # print_next_steps [healthy]: always prints the access URL + default creds, even
 # if the health check timed out (the operator still needs this information).
 print_next_steps() {
-  local healthy="${1:-1}" admin_email admin_pass public_base host_ip
+  local healthy="${1:-1}" admin_email admin_pass public_base host_ip redirect_val
   admin_email="$(current_value PORTAL_DEFAULT_ADMIN_EMAIL)"
   [ -z "$admin_email" ] && admin_email="admin@rcv.example.com"
   admin_pass="$(current_value PORTAL_DEFAULT_ADMIN_PASSWORD)"
@@ -273,7 +354,7 @@ print_next_steps() {
   case "$public_base" in
     "" | "http://localhost:8000" | "https://noc.example.com") public_base="" ;;
   esac
-  host_ip="$(hostname -I 2>/dev/null | awk '{print $1}')" || host_ip=""
+  host_ip="$(detect_host_ip)"
 
   echo
   echo "============================================================"
@@ -288,14 +369,26 @@ print_next_steps() {
   echo "  Open:     https://localhost/         (on this host)"
   [ -n "$host_ip" ] && echo "            https://$host_ip/         (from your network)"
   echo "            Gateway uses a self-signed cert (tls internal): accept the"
-  echo "            browser warning once. HTTP :80 redirects to HTTPS :443."
+  echo "            browser warning once."
+  # Issue #162 secondary bug: this used to unconditionally claim "HTTP :80
+  # redirects to HTTPS :443", which is false whenever PORTAL_FORCE_HTTPS_REDIRECT
+  # is at its default ("false") — :80 proxies plaintext instead. Say what this
+  # install actually does.
+  redirect_val="$(current_value PORTAL_FORCE_HTTPS_REDIRECT)"
+  if [ "${redirect_val:-false}" = "true" ]; then
+    echo "            HTTP :80 redirects to HTTPS :443 (PORTAL_FORCE_HTTPS_REDIRECT=true)."
+  else
+    echo "            HTTP :80 also works directly (PORTAL_FORCE_HTTPS_REDIRECT=false, the"
+    echo "            default) — set it to \"true\" in .env for a public deploy so :80 redirects"
+    echo "            to HTTPS instead of proxying plaintext."
+  fi
   [ -n "$public_base" ] && echo "  Public:   $public_base"
   echo
   echo "  Sign in:  $admin_email"
   echo "  Password: $admin_pass"
   echo "            ^ rotate this password immediately at first login."
   echo
-  echo "  Next: add modules — Portal → Modules → Install."
+  echo "  Next: add modules — Portal → Modules → Install. See HANDOFF.md."
   echo "============================================================"
 }
 
@@ -389,8 +482,8 @@ main() {
     exit 0
   fi
   # Build from local source only when the dev override + source tree are present
-  # (a full repo clone). A clean install bundle ships just the base compose,
-  # which PULLS the published images instead.
+  # (a full repo clone). A clean public install bundle ships just the base
+  # compose, which PULLS the published images instead (issue #104 / #107).
   local build_files=() build_flag=""
   if [ -f "$SCRIPT_DIR/docker-compose.build.yml" ] && [ -d "$SCRIPT_DIR/backend" ]; then
     build_files=(-f docker-compose.yml -f docker-compose.build.yml)
@@ -402,7 +495,7 @@ main() {
   # shellcheck disable=SC2046 # intentional word-splitting of the profile flag
   (cd "$SCRIPT_DIR" && compose "${build_files[@]}" $(deploy_profile_args) up -d $build_flag)
   # Print the access URL + credentials whether or not the health probe passed —
-  # the banner is always shown so operators can find the login URL.
+  # an aborted banner is why operators couldn't find the login (issue follow-up).
   if wait_for_health; then
     print_next_steps 1
   else
