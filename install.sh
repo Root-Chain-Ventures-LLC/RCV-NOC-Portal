@@ -27,7 +27,7 @@ if [ "${1:-}" != "add-module" ]; then
     case "$arg" in
       --no-start) START=0 ;;
       --base-url=*)
-        # Explicit override for PORTAL_PUBLIC_BASE_URL (issue #164), e.g.
+        # Explicit override for PORTAL_PUBLIC_BASE_URL, e.g.
         # --base-url=https://noc.myorg.com. Takes precedence over both the
         # auto-detected host IP and any existing .env value (a deliberate
         # operator choice always wins). See also: the PORTAL_PUBLIC_BASE_URL
@@ -69,13 +69,13 @@ gen_fernet_key() {
 detect_host_ip() {
   # Best-effort primary LAN/public IPv4 of this host, empty if undetectable.
   # Shared by the PORTAL_PUBLIC_BASE_URL default, the Caddy TLS subject list
-  # (PORTAL_GATEWAY_ADDRESSES, issue #162), and the printed banner, so all
+  # (PORTAL_GATEWAY_ADDRESSES), and the printed banner, so all
   # three always agree on the same address.
   hostname -I 2>/dev/null | awk '{print $1}'
 }
 
 gen_password() {
-  # A short random admin password printed once at install (issue #108). The UI
+  # A short random admin password printed once at install. The UI
   # forces a rotation at first login, so this only has to survive the first
   # sign-in — it must never be the static `changeme` on disk. Strip + / = so the
   # value is safe in .env and easy to copy-paste.
@@ -149,7 +149,7 @@ honor_env_vars() {
 
 # ensure_gateway_addresses: set PORTAL_GATEWAY_ADDRESSES, the TLS automation
 # subject list the bundled Caddy's :443 block issues its self-signed
-# certificate for (issue #162). A bare ":443" site address has NO subject for
+# certificate for. A bare ":443" site address has NO subject for
 # `tls internal` to issue a cert FOR, so no certificate is ever minted and
 # every HTTPS handshake fails with `internal_error` — confirmed by hand via
 # `curl -k https://localhost/` and `curl -k https://<host-ip>/` both failing
@@ -157,17 +157,24 @@ honor_env_vars() {
 # 127.0.0.1 (so `https://localhost/` — what the success banner tells the
 # operator to open — always gets a cert) plus the detected host IP so
 # `https://<host-ip>/` does too.
+#
+# Also sets PORTAL_PRIMARY_ADDRESS, the single host (no port) the
+# Caddyfile's global options block uses for `default_sni` — literal IPs never
+# carry SNI (RFC 6066), so Caddy needs an explicit fallback cert to hand back
+# on a no-SNI handshake. Same detected IP as PORTAL_GATEWAY_ADDRESSES /
+# PORTAL_PUBLIC_BASE_URL so all three agree; "localhost" when undetectable.
 ensure_gateway_addresses() {
   local host_ip addrs
   host_ip="$(detect_host_ip)"
   addrs="localhost:443, 127.0.0.1:443"
   [ -n "$host_ip" ] && addrs="$addrs, $host_ip:443"
   set_value PORTAL_GATEWAY_ADDRESSES "$addrs"
+  set_value PORTAL_PRIMARY_ADDRESS "${host_ip:-localhost}"
 }
 
 # ensure_public_base_url: resolve PORTAL_PUBLIC_BASE_URL to something that
 # actually works, instead of leaving the .env.example placeholder in place
-# (issue #164 — every module's OIDC redirect URIs are minted from this value
+# (every module's OIDC redirect URIs are minted from this value
 # at register time, so a placeholder means "SSO dead on arrival" for every
 # module installed against a fresh deploy). Precedence, highest first:
 #   1. --base-url=<url> (explicit operator choice)
@@ -220,12 +227,12 @@ ensure_env() {
   fill_secret POSTGRES_PASSWORD "gen_hex" "portal"
   fill_secret PORTAL_SECRETS_ENCRYPTION_KEY "gen_fernet_key"
   # Replace the `changeme` placeholder admin password with a random one so the
-  # default credential is never persisted (issue #108). print_next_steps echoes
+  # default credential is never persisted. print_next_steps echoes
   # the generated value once; first login forces a rotation.
   fill_secret PORTAL_DEFAULT_ADMIN_PASSWORD "gen_password" "changeme"
   echo "Secrets ensured in .env (existing values preserved)."
 
-  # HTTPS posture check (issue #117). ----------------------------------------
+  # HTTPS posture check. ----------------------------------------
   # The default install posture is HTTPS (PORTAL_REQUIRE_HTTPS=true). Warn the
   # operator if the base URL is still the example placeholder so they know to
   # update it before SSO/OIDC will work in production. Dev/LAN installs that
@@ -256,7 +263,7 @@ ensure_env() {
     echo "  cleartext. Acceptable for local dev / trusted LAN only."
   fi
 
-  # Auto-enable one-click module deploys (issue #51). install.sh IS the
+  # Auto-enable one-click module deploys. install.sh IS the
   # single-host Docker installer, so the environment is "compose" by
   # definition — detect it instead of making the operator hand-set
   # PORTAL_ORCHESTRATOR and start a profile. Only promote the default 'none';
@@ -370,7 +377,7 @@ print_next_steps() {
   [ -n "$host_ip" ] && echo "            https://$host_ip/         (from your network)"
   echo "            Gateway uses a self-signed cert (tls internal): accept the"
   echo "            browser warning once."
-  # Issue #162 secondary bug: this used to unconditionally claim "HTTP :80
+  # This used to unconditionally claim "HTTP :80
   # redirects to HTTPS :443", which is false whenever PORTAL_FORCE_HTTPS_REDIRECT
   # is at its default ("false") — :80 proxies plaintext instead. Say what this
   # install actually does.
@@ -388,7 +395,7 @@ print_next_steps() {
   echo "  Password: $admin_pass"
   echo "            ^ rotate this password immediately at first login."
   echo
-  echo "  Next: add modules — Portal → Modules → Install. See HANDOFF.md."
+  echo "  Next: add modules — Portal → Modules → Install. See the README's 'Add modules' section."
   echo "============================================================"
 }
 
@@ -483,7 +490,7 @@ main() {
   fi
   # Build from local source only when the dev override + source tree are present
   # (a full repo clone). A clean public install bundle ships just the base
-  # compose, which PULLS the published images instead (issue #104 / #107).
+  # compose, which PULLS the published images instead.
   local build_files=() build_flag=""
   if [ -f "$SCRIPT_DIR/docker-compose.build.yml" ] && [ -d "$SCRIPT_DIR/backend" ]; then
     build_files=(-f docker-compose.yml -f docker-compose.build.yml)
