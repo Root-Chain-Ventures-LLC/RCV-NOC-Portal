@@ -157,12 +157,19 @@ honor_env_vars() {
 # 127.0.0.1 (so `https://localhost/` — what the success banner tells the
 # operator to open — always gets a cert) plus the detected host IP so
 # `https://<host-ip>/` does too.
+#
+# Also sets PORTAL_PRIMARY_ADDRESS, the single host (no port) the
+# Caddyfile's global options block uses for `default_sni` — literal IPs never
+# carry SNI (RFC 6066), so Caddy needs an explicit fallback cert to hand back
+# on a no-SNI handshake. Same detected IP as PORTAL_GATEWAY_ADDRESSES /
+# PORTAL_PUBLIC_BASE_URL so all three agree; "localhost" when undetectable.
 ensure_gateway_addresses() {
   local host_ip addrs
   host_ip="$(detect_host_ip)"
   addrs="localhost:443, 127.0.0.1:443"
   [ -n "$host_ip" ] && addrs="$addrs, $host_ip:443"
   set_value PORTAL_GATEWAY_ADDRESSES "$addrs"
+  set_value PORTAL_PRIMARY_ADDRESS "${host_ip:-localhost}"
 }
 
 # ensure_public_base_url: resolve PORTAL_PUBLIC_BASE_URL to something that

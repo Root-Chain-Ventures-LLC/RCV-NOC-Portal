@@ -39,6 +39,36 @@
 #   handle /pingit/* { reverse_proxy pingit-web:8000 }
 #   handle /outage/* { reverse_proxy outagelog-web:3000 }
 #   handle /sites/*  { reverse_proxy site-look-up-app:3000 }
+#
+# Global options. Once the :443
+# block's automation subjects include real hosts (not a bare ":443"), two
+# things go wrong without this block:
+#
+#  1. No SNI on literal IPs: RFC 6066 forbids sending SNI for an IP-literal
+#     host, so a browser/curl hitting `https://<host-ip>/` presents NO SNI at
+#     all. Caddy has no fallback cert for a no-SNI handshake against a
+#     multi-subject :443 block, so it fails with `tlsv1 alert internal
+#     error` for every client except one connecting to plain `localhost`
+#     (confirmed live: `openssl s_client -connect <ip>:443` with no
+#     `-servername` fails; the same connection WITH `-servername <ip>`
+#     succeeds). `default_sni` gives Caddy a cert to hand back when no SNI is
+#     presented.
+#  2. Redirect hijack: once the :443 block has real host subjects, Caddy's
+#     auto_https machinery installs its OWN :80->:443 redirects for those
+#     hosts — overriding the plain-:80 site block below and making
+#     PORTAL_FORCE_HTTPS_REDIRECT=false a no-op (confirmed live: :80 308'd to
+#     the broken :443 listener even with the flag off). `disable_redirects`
+#     leaves :80 entirely to the site block below, which already implements
+#     the opt-in redirect itself via @force_https.
+#
+# PORTAL_PRIMARY_ADDRESS is host-only (no port) — the same primary address
+# install.sh detects for PORTAL_GATEWAY_ADDRESSES / PORTAL_PUBLIC_BASE_URL,
+# so all three agree. Defaults to "localhost" when undetectable, matching the
+# other two.
+{
+	auto_https disable_redirects
+	default_sni {$PORTAL_PRIMARY_ADDRESS:localhost}
+}
 
 # Snippet: 403 the credentials path for non-RFC1918 clients.
 # `client_ip` is the address resolved through Caddy's trusted-proxy handling, so

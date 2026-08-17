@@ -90,6 +90,12 @@ services:
       # the host's detected IP(s) so `https://<host-ip>/` (and `localhost`)
       # both get a real self-signed cert out of the box.
       PORTAL_GATEWAY_ADDRESSES: ${PORTAL_GATEWAY_ADDRESSES:-localhost:443}
+      # Fallback TLS SNI for the Caddyfile's global options block. Literal IPs never carry SNI (RFC 6066), so a browser hitting
+      # `https://<host-ip>/` presents no SNI at all; without `default_sni`
+      # Caddy can't pick a cert for a multi-subject :443 block and the
+      # handshake fails with `tlsv1 alert internal error`. install.sh sets
+      # this to the same detected host IP as PORTAL_GATEWAY_ADDRESSES.
+      PORTAL_PRIMARY_ADDRESS: ${PORTAL_PRIMARY_ADDRESS:-localhost}
     depends_on:
       web:
         condition: service_healthy
