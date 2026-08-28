@@ -96,14 +96,15 @@
 }
 
 :80 {
-	# Opt-in HTTPS redirect for public deploys: set
-	# PORTAL_FORCE_HTTPS_REDIRECT=true so cleartext X-Api-Key / Bearer tokens on
-	# :80 are 308-redirected to HTTPS. OFF by default ("false") — LAN /
-	# tls-internal / single-VM installs reached over plain HTTP keep working.
+	# HTTPS redirect, ON by default (secure-by-default per the production
+	# security review): cleartext X-Api-Key / Bearer tokens on :80 are
+	# 308-redirected to HTTPS. Opt OUT with PORTAL_FORCE_HTTPS_REDIRECT=false
+	# for a deliberately plain-HTTP LAN deploy. The env fallback here is
+	# "true" too, so an install whose .env predates the flag is still secure.
 	# Quote the whole placeholder so the substituted value is always a CEL
 	# string — a bare `false`/`true` is parsed as a bool and CEL errors on
 	# `bool == string`, so Caddy refuses to start. Works for unset/"false"/"true".
-	@force_https expression `"{$PORTAL_FORCE_HTTPS_REDIRECT:false}" == "true"`
+	@force_https expression `"{$PORTAL_FORCE_HTTPS_REDIRECT:true}" == "true"`
 	redir @force_https https://{host}{uri} 308
 
 	import credentials_ip_guard
