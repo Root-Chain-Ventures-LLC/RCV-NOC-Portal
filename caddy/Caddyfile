@@ -74,6 +74,29 @@
 # `client_ip` is the address resolved through Caddy's trusted-proxy handling, so
 # a left-most X-Forwarded-For entry can't be forged to look private. Imported
 # into every site block that fronts the backend.
+# Snippet: security response headers. Imported into both site
+# blocks. HSTS is only meaningful (and only honoured by browsers) over TLS,
+# so the :443 block passes "hsts" and the plain :80 block passes nothing.
+# The CSP is a baseline for the SPA: the pages use inline scripts/styles, so
+# script-src/style-src can't be locked to 'self' yet; framing, base-uri and
+# plugins are closed off, which is the clickjacking/XSS containment that
+# matters most. Modules behind /pingit, /sites, /outage get the same headers
+# because the snippet is imported at the site level (before their handles).
+(security_headers) {
+	header {
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+		-Server
+		defer
+	}
+}
+(hsts) {
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+}
+
 (credentials_ip_guard) {
 	@cred_public {
 		path_regexp ^/api/platform/integrations/[^/]+/credentials$
@@ -85,6 +108,8 @@
 {$PORTAL_GATEWAY_ADDRESSES:localhost:443} {
 	tls internal
 
+	import security_headers
+	import hsts
 	import credentials_ip_guard
 
 	# Module routes the Portal deployer writes on install,
@@ -107,6 +132,7 @@
 	@force_https expression `"{$PORTAL_FORCE_HTTPS_REDIRECT:true}" == "true"`
 	redir @force_https https://{host}{uri} 308
 
+	import security_headers
 	import credentials_ip_guard
 
 	# Plain HTTP for LAN / single-VM installs (when the redirect above is off).
