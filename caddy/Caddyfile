@@ -88,7 +88,13 @@
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
-		Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+		# `?` sets a DEFAULT: written only when the upstream response has no
+		# CSP of its own. A bare `Content-Security-Policy` here REPLACES the
+		# header, which silently discarded the portal's
+		# per-response `script-src 'nonce-…'` (#210) in every Caddy-fronted
+		# topology. Module proxies (/sites, /pingit, /outage) and static
+		# assets still get this baseline; pages that set their own keep it.
+		?Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
 		-Server
 		defer
 	}
