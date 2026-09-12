@@ -100,7 +100,14 @@
 	}
 }
 (hsts) {
-	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	# `?` = default: written only when the upstream response carries no HSTS
+	# of its own. A `?` op is evaluated once the upstream headers exist (a
+	# require-matcher implies deferral), so a module that sends HSTS itself
+	# (PingIt does) keeps its one header instead of arriving with two (#230
+	# note). Deliberately NOT a `header { … defer }` block: a block holding
+	# only `?` ops plus `defer` adapts to an empty deferred handler that
+	# panics Caddy 2.8 at provision time.
+	header ?Strict-Transport-Security "max-age=31536000; includeSubDomains"
 }
 
 (credentials_ip_guard) {
