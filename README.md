@@ -12,7 +12,7 @@ and the gateway that fronts the RCV modules — **PingIt**, **Site Look Up**, an
 
 ## License
 
-**RCV Community License 1.0** — free for personal / home-lab use and for any
+**RCV Community License 1.1** — free for personal / home-lab use and for any
 organization's own internal operations. A paid commercial license is required
 only to offer the software to third parties as a hosted, managed, or SaaS
 service. See [`LICENSE`](LICENSE). Commercial inquiries: **legal@rootchainventures.com**.
