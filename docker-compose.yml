@@ -39,7 +39,10 @@ services:
       # Module deployment. Default off; set to 'compose' and run the
       # deployer (profile: deploy) to enable one-click install on this host.
       PORTAL_ORCHESTRATOR: ${PORTAL_ORCHESTRATOR:-none}
-      PORTAL_DEPLOYER_URL: ${PORTAL_DEPLOYER_URL:-http://deployer:9000}
+      # The control channel rides the dedicated `deployer-ctl` network:
+      # `deployer-ctl` is a network alias that exists ONLY on that
+      # network, so this URL cannot resolve over rcv-net.
+      PORTAL_DEPLOYER_URL: ${PORTAL_DEPLOYER_URL:-http://deployer-ctl:9000}
       PORTAL_DEPLOYER_TOKEN: ${PORTAL_DEPLOYER_TOKEN:-}
       # First-run admin password. install.sh writes a
       # random value into .env; without this passthrough the container falls back
@@ -53,6 +56,7 @@ services:
         condition: service_healthy
     networks:
       - rcv-net
+      - deployer-ctl
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz').status==200 else 1)"]
       interval: 30s
@@ -123,8 +127,19 @@ services:
       # while it is empty.
       PORTAL_DEPLOYER_TOKEN: ${PORTAL_DEPLOYER_TOKEN:-}
       PORTAL_PUBLIC_BASE_URL: ${PORTAL_PUBLIC_BASE_URL:-http://localhost:8000}
+      # Portal self-update: absolute host path of this install,
+      # mounted below at the SAME path so `docker compose` run from inside the
+      # deployer resolves the project's relative bind mounts to real host
+      # paths. install.sh sets it; empty = self-update reports "unsupported".
+      PORTAL_INSTALL_DIR: ${PORTAL_INSTALL_DIR:-}
+      PORTAL_COMPOSE_PROJECT: rcv-portal
+      # Only requests from this network are served; see deployer/app.py.
+      PORTAL_DEPLOYER_CTL_NETWORK: rcv-deployer-ctl
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # Same-path mount of the install dir (compose file + .env) for self-update.
+      # Falls back to the empty /var/empty when PORTAL_INSTALL_DIR is unset.
+      - ${PORTAL_INSTALL_DIR:-/var/empty}:${PORTAL_INSTALL_DIR:-/var/empty}
       - deployer_state:/var/lib/rcv-deployer
       # Module images live in private GHCR packages. `docker compose` runs inside
       # this container and resolves registry auth from *its own* docker config —
@@ -135,7 +150,14 @@ services:
       # Writes per-module Caddy route snippets here on deploy/undeploy, then reloads the gateway. Read-write.
       - ./caddy/modules:/etc/caddy/modules
     networks:
-      - rcv-net
+      # rcv-net: ONLY so the deployer can health-probe `<id>-web` module
+      # containers by service name (the deploy health-gate) and exec into the
+      # gateway. The Portal -> deployer control channel does not use it.
+      rcv-net: {}
+      # Control channel: shared with `web` and nobody else.
+      deployer-ctl:
+        aliases:
+          - deployer-ctl
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:9000/health').status==200 else 1)"]
       interval: 30s
@@ -146,6 +168,14 @@ services:
 networks:
   rcv-net:
     name: rcv-net
+  # Dedicated Portal <-> deployer control channel. `internal: true`
+  # = no host/egress routing; only `web` and `deployer` attach. Modules, the
+  # database and the gateway are not on it, so a compromised module cannot
+  # reach the Docker-socket-holding deployer's API. Compose creates it
+  # automatically on `up`, so existing installs upgrade in place.
+  deployer-ctl:
+    name: rcv-deployer-ctl
+    internal: true
 
 volumes:
   caddy_data:

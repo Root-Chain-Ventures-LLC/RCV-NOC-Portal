@@ -280,6 +280,21 @@ ensure_env() {
   # compose orchestrator needs it. Generate one if empty.
   fill_secret PORTAL_DEPLOYER_TOKEN "gen_hex"
 
+  # Control channel moved onto the dedicated `deployer-ctl` network.
+  # An .env written by an older installer pins the old rcv-net URL; rewrite
+  # exactly that old default (never a custom value) so an in-place upgrade
+  # picks up the isolated channel. The old URL would keep working either way
+  # (the deployer is still on rcv-net for health probing), just un-isolated.
+  if [ "$(current_value PORTAL_DEPLOYER_URL)" = "http://deployer:9000" ]; then
+    set_value PORTAL_DEPLOYER_URL "http://deployer-ctl:9000"
+    echo "Upgraded PORTAL_DEPLOYER_URL to the dedicated deployer-ctl network."
+  fi
+
+  # Absolute path of this install: the deployer needs it (mounted at the same
+  # path) to run `docker compose` against this project for Portal self-update
+  #. Always refreshed so a moved install directory heals itself.
+  set_value PORTAL_INSTALL_DIR "$SCRIPT_DIR"
+
   ensure_registry_creds
 }
 
