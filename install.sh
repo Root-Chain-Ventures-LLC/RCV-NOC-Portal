@@ -158,18 +158,61 @@ honor_env_vars() {
 # operator to open — always gets a cert) plus the detected host IP so
 # `https://<host-ip>/` does too.
 #
+# The list is MERGED with any existing value, never replaced:
+# operator-added hostnames survive an upgrade re-run.
+#
 # Also sets PORTAL_PRIMARY_ADDRESS, the single host (no port) the
 # Caddyfile's global options block uses for `default_sni` — literal IPs never
 # carry SNI (RFC 6066), so Caddy needs an explicit fallback cert to hand back
 # on a no-SNI handshake. Same detected IP as PORTAL_GATEWAY_ADDRESSES /
 # PORTAL_PUBLIC_BASE_URL so all three agree; "localhost" when undetectable.
 ensure_gateway_addresses() {
-  local host_ip addrs
+  local host_ip existing primary entry addr joined=""
+  local -a merged=() defaults=() parts=()
   host_ip="$(detect_host_ip)"
-  addrs="localhost:443, 127.0.0.1:443"
-  [ -n "$host_ip" ] && addrs="$addrs, $host_ip:443"
-  set_value PORTAL_GATEWAY_ADDRESSES "$addrs"
-  set_value PORTAL_PRIMARY_ADDRESS "${host_ip:-localhost}"
+  existing="$(current_value PORTAL_GATEWAY_ADDRESSES)"
+
+  # MERGE, don't replace: an upgrade re-runs this installer, and operators add
+  # their own hostnames to this list (Caddy only serves a certificate for names
+  # it is told about). Keep every existing entry in its original order (trimmed,
+  # empties ignored, exact duplicates dropped), then append only the detected
+  # defaults that are missing.
+  IFS=',' read -r -a parts <<<"$existing" || true
+  for entry in ${parts[@]+"${parts[@]}"}; do
+    entry="${entry#"${entry%%[![:space:]]*}"}"
+    entry="${entry%"${entry##*[![:space:]]}"}"
+    [ -n "$entry" ] || continue
+    _gw_has "$entry" ${merged[@]+"${merged[@]}"} || merged+=("$entry")
+  done
+
+  defaults=("localhost:443" "127.0.0.1:443")
+  [ -n "$host_ip" ] && defaults+=("$host_ip:443")
+  for addr in "${defaults[@]}"; do
+    _gw_has "$addr" ${merged[@]+"${merged[@]}"} || merged+=("$addr")
+  done
+
+  for entry in "${merged[@]}"; do
+    joined="${joined:+$joined, }$entry"
+  done
+  set_value PORTAL_GATEWAY_ADDRESSES "$joined"
+
+  # PORTAL_PRIMARY_ADDRESS: keep an operator-chosen value. Empty or the
+  # .env.example placeholder ("localhost") counts as unset and gets the
+  # detected host.
+  primary="$(current_value PORTAL_PRIMARY_ADDRESS)"
+  if [ -z "$primary" ] || [ "$primary" = "localhost" ]; then
+    set_value PORTAL_PRIMARY_ADDRESS "${host_ip:-localhost}"
+  fi
+}
+
+# _gw_has NEEDLE ITEM... : true when NEEDLE equals one of ITEMs.
+_gw_has() {
+  local needle="$1" item
+  shift
+  for item in "$@"; do
+    [ "$item" = "$needle" ] && return 0
+  done
+  return 1
 }
 
 # ensure_public_base_url: resolve PORTAL_PUBLIC_BASE_URL to something that
