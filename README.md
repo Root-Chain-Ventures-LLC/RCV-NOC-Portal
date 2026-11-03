@@ -47,9 +47,9 @@ forced to set a new password.
 - **Pin a release:** set `PORTAL_VERSION=v0.2.0` in `.env` (default `latest`).
 - **Production:** set `PORTAL_PUBLIC_BASE_URL=https://noc.yourdomain`, put a real
   cert on the gateway (edit [`caddy/Caddyfile`](caddy/Caddyfile) — swap
-  `tls internal` for your email/domain) and set `PORTAL_FORCE_HTTPS_REDIRECT=true`.
-- **LAN / dev over HTTP:** set `PORTAL_REQUIRE_HTTPS=false` and
-  `PORTAL_PUBLIC_BASE_URL=http://<your-host>`.
+  `tls internal` for your email/domain). The HTTP→HTTPS redirect is on by default.
+- **LAN / dev over HTTP:** set `PORTAL_REQUIRE_HTTPS=false`,
+  `PORTAL_FORCE_HTTPS_REDIRECT=false` and `PORTAL_PUBLIC_BASE_URL=http://<your-host>`.
 - To set config up front, copy `.env.example` to `.env` and edit before running
   `./install.sh` — your values are preserved.
 
@@ -63,7 +63,7 @@ forced to set a new password.
 | `PORTAL_SECRETS_ENCRYPTION_KEY` | yes | Fernet key for secrets at rest — must survive restarts. Auto-generated. |
 | `POSTGRES_PASSWORD` | yes | Bundled Postgres password. Auto-generated. |
 | `PORTAL_DEFAULT_ADMIN_EMAIL` | no | First-run admin email (default `admin@rcv.example.com`). |
-| `PORTAL_FORCE_HTTPS_REDIRECT` | no | `true` once you have a real cert on `:443`. |
+| `PORTAL_FORCE_HTTPS_REDIRECT` | no | Default `true` (:80 redirects to HTTPS). Set `false` only for a deliberate plain-HTTP LAN deploy. |
 | `PORTAL_SSO_*` | no | Optional pre-seed of Entra/OIDC SSO (or configure in Settings → Authentication). |
 
 ---
