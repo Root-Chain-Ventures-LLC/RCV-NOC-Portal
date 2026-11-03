@@ -36,7 +36,6 @@
 # proxies are appended by the Portal's gateway-config generator as modules are
 # installed, e.g.:
 #
-#   handle /pingit/* { reverse_proxy pingit-web:8000 }
 #   handle /outage/* { reverse_proxy outagelog-web:3000 }
 #   handle /sites/*  { reverse_proxy site-look-up-app:3000 }
 #
@@ -80,7 +79,7 @@
 # The CSP is a baseline for the SPA: the pages use inline scripts/styles, so
 # script-src/style-src can't be locked to 'self' yet; framing, base-uri and
 # plugins are closed off, which is the clickjacking/XSS containment that
-# matters most. Modules behind /pingit, /sites, /outage get the same headers
+# matters most. Modules behind /sites and /outage get the same headers
 # because the snippet is imported at the site level (before their handles).
 (security_headers) {
 	header {
@@ -92,7 +91,7 @@
 		# CSP of its own. A bare `Content-Security-Policy` here REPLACES the
 		# header, which silently discarded the portal's
 		# per-response `script-src 'nonce-…'` in every Caddy-fronted
-		# topology. Module proxies (/sites, /pingit, /outage) and static
+		# topology. Module proxies (/sites, /outage) and static
 		# assets still get this baseline; pages that set their own keep it.
 		?Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
 		-Server
@@ -103,7 +102,7 @@
 	# `?` = default: written only when the upstream response carries no HSTS
 	# of its own. A `?` op is evaluated once the upstream headers exist (a
 	# require-matcher implies deferral), so a module that sends HSTS itself
-	# (PingIt does) keeps its one header instead of arriving with two. Deliberately NOT a `header { … defer }` block: a block holding
+	# (some do) keeps its one header instead of arriving with two. Deliberately NOT a `header { … defer }` block: a block holding
 	# only `?` ops plus `defer` adapts to an empty deferred handler that
 	# panics Caddy 2.8 at provision time.
 	header ?Strict-Transport-Security "max-age=31536000; includeSubDomains"

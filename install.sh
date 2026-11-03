@@ -472,15 +472,19 @@ add_module() {
 
   local image port dbimage
   case "$id" in
-    pingit) image=pingit-web; port=8000; dbimage="timescale/timescaledb:latest-pg16" ;;
+    pingit)
+      echo "PingIt is no longer part of the NOC Portal stack; it is a standalone app with its own releases." >&2
+      echo "Install it from its own repo (it can use this Portal as a plain OIDC provider)." >&2
+      exit 2
+      ;;
     site-look-up) image=site-look-up; port=3000; dbimage="postgres:16-alpine" ;;
     outage-track) image=outage-track; port=3000; dbimage="postgres:16-alpine" ;;
     "")
-      echo "usage: install.sh add-module <pingit|site-look-up|outage-track> [--print]" >&2
+      echo "usage: install.sh add-module <site-look-up|outage-track> [--print]" >&2
       exit 2
       ;;
     *)
-      echo "Unknown module: $id (pingit | site-look-up | outage-track)" >&2
+      echo "Unknown module: $id (site-look-up | outage-track)" >&2
       exit 2
       ;;
   esac

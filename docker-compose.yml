@@ -10,7 +10,7 @@
 # (install.sh does this for you.)
 #
 # Only `caddy` binds host ports; it is the platform front-door gateway. Modules
-# (PingIt, Outage-Track, Site-Look-Up) attach to the shared `rcv-net` network and
+# (Outage-Track, Site-Look-Up) attach to the shared `rcv-net` network and
 # are routed by path (default) or subdomain.
 
 name: rcv-portal
