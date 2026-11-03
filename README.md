@@ -2,8 +2,9 @@
 
 The **RCV NOC Portal** is the hub of the Root Chain Ventures network-operations
 platform: it owns identity / single sign-on (SSO), API keys, the module catalog,
-and the gateway that fronts the RCV modules — **PingIt**, **Site Look Up**, and
-**Outage Track**.
+and the gateway that fronts the RCV modules — **Site Look Up** and
+**Outage Track**. (PingIt is a standalone app with its own releases; it can use
+this Portal as a plain OIDC identity provider.)
 
 > **Install the Portal first, then add modules from the Portal UI.** The Portal is
 > the only standalone install; every module is added through it, and the Portal
@@ -99,7 +100,7 @@ Portal plus modules declaratively — advanced/GitOps.)
 **On Docker**, sign in as an admin and open **Modules → Install**: the Portal
 mints the module's OIDC client + API key and deploys it for you via the bundled
 deployer (enabled automatically by `install.sh`). You can alternatively scaffold
-a module's stack manually with `./install.sh add-module pingit`, then register
+a module's stack manually with `./install.sh add-module site-look-up`, then register
 it in the Portal UI.
 
 **On Kubernetes, module install is manual** — the one-click deploy applies to
@@ -108,7 +109,7 @@ Docker installs only:
 1. In the Portal, open **Modules** and register the module. Copy the **OIDC
    client secret** it displays — it is shown **once**.
 2. Open **API Keys** and mint a platform key for the module (grant
-   `integrations:read` for PingIt and Site Look Up; Outage Track needs no scopes).
+   `integrations:read` for Site Look Up; Outage Track needs no scopes).
 3. Deploy the module with the umbrella chart, filling its `secretEnv` values —
    e.g. Site Look Up:
 
@@ -121,17 +122,16 @@ Docker installs only:
      --set siteLookUp.secretEnv.OIDC_CLIENT_SECRET=<secret from step 1>
    ```
 
-   Umbrella module keys and their `secretEnv` names: `pingit`
-   (`PINGIT_PORTAL_API_KEY`, `PINGIT_PORTAL_OIDC_CLIENT_SECRET`) · `siteLookUp`
+   Umbrella module keys and their `secretEnv` names: `siteLookUp`
    (`JWT_SECRET`, `PORTAL_API_KEY`, `OIDC_CLIENT_SECRET`) · `outageTrack`
    (`NEXTAUTH_SECRET`, `PORTAL_API_KEY`, `PORTAL_OIDC_CLIENT_SECRET`). See
    [`values.example.yaml`](values.example.yaml) for a file-based install.
-4. The Portal gateway routes `/pingit`, `/sites`, and `/outage` to the modules
+4. The Portal gateway routes `/sites` and `/outage` to the modules
    automatically; the module shows healthy in the Portal once its pod is up.
 
-Module repos: [RCV-Ping-It](https://github.com/Root-Chain-Ventures-LLC/RCV-Ping-It) ·
-[RCV-Site-Look-Up](https://github.com/Root-Chain-Ventures-LLC/RCV-Site-Look-Up) ·
+Module repos: [RCV-Site-Look-Up](https://github.com/Root-Chain-Ventures-LLC/RCV-Site-Look-Up) ·
 [RCV-Outage-Track](https://github.com/Root-Chain-Ventures-LLC/RCV-Outage-Track).
+PingIt (standalone): [RCV-Ping-It](https://github.com/Root-Chain-Ventures-LLC/RCV-Ping-It).
 
 ## Update
 
@@ -146,7 +146,7 @@ Current versions: see this repo's **Releases** and the GHCR package pages.
 Charts (OCI) under `ghcr.io/root-chain-ventures-llc/`: `helm/noc-portal`,
 `helm/rcv-module`, `helm/rcv-platform`.
 Images under `ghcr.io/root-chain-ventures-llc/`: `noc-portal-web`,
-`noc-portal-deployer`, `pingit-web`, `pingit-worker`, `site-look-up`, `outage-track`.
+`noc-portal-deployer`, `site-look-up`, `outage-track`.
 
 ## Uninstall
 
